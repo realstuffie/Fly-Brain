@@ -385,12 +385,9 @@ class BrainEngine:
               f"{len(self._syn_vals)} synapses")
 
         self._fast_hebb = None
-        try:
+        if self.model.propagation_backend == 'event':
             from plasticity import update_weights
             self._fast_hebb = update_weights
-            print("[BrainEngine] Hebbian fast path active (triton single-pass)")
-        except ImportError:
-            pass  # triton unavailable — fall back to torch ops
 
     def _hebb_update(self):
         """Hebbian update: co-active synapses strengthen, all decay."""
