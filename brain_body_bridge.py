@@ -323,6 +323,10 @@ class BrainEngine:
 
         # Population monitoring (registered externally)
         self.populations = {}  # {name: tensor_indices}
+        self._readout_indices = None
+        self._readout_rows = []
+        self._readout_pending = 0
+        self._step_debt = 0
 
         print(f"[BrainEngine] {self.num_neurons} neurons on {self.device}")
         print(f"[BrainEngine] Recurrent propagation: {self.model.propagation_backend}")
@@ -419,6 +423,7 @@ class BrainEngine:
 
     def set_stimulus(self, stim_name):
         """Set input firing rates for a named stimulus. None clears all."""
+        self.finish_pending_steps()
         self.rates.zero_()
         if stim_name and stim_name in STIMULI:
             idx = self.stim_indices.get(stim_name, [])
@@ -438,6 +443,7 @@ class BrainEngine:
         """
         if photo_indices is None or len(photo_indices) == 0:
             return
+        self.finish_pending_steps()
         self.rates[0, photo_indices] = torch.as_tensor(
             photo_rates, dtype=torch.float32, device=self.device,
         )
@@ -455,6 +461,7 @@ class BrainEngine:
         """
         if indices is None or len(indices) == 0:
             return
+        self.finish_pending_steps()
         new_rates = torch.as_tensor(
             rates, dtype=torch.float32, device=self.device)
         current = self.rates[0, indices]
@@ -480,9 +487,101 @@ class BrainEngine:
         return {name: spk[0, idx].item()
                 for name, idx in self.dn_indices.items()}
 
+    def _build_readout_index(self):
+        parts = [torch.tensor(list(self.dn_indices.values()),
+                              dtype=torch.long, device=self.device)]
+        offset = len(self.dn_indices)
+        self._readout_slices = {}
+        for name, indices in self.populations.items():
+            indices = torch.as_tensor(indices, dtype=torch.long,
+                                      device=self.device)
+            parts.append(indices)
+            self._readout_slices[name] = slice(offset, offset + len(indices))
+            offset += len(indices)
+        self._readout_indices = torch.cat(parts)
+
+    def record_spike_readout(self):
+        """Queue this step's motor and population spikes on the device.
+
+        Nothing is copied to the CPU here, so the GPU keeps running
+        asynchronously while the physics step proceeds.
+        """
+        if self._readout_indices is None:
+            self._build_readout_index()
+        self._readout_rows.append(
+            self.state[2][0].index_select(0, self._readout_indices).unsqueeze(0))
+        self._readout_pending += 1
+
+    def pending_spike_readouts(self):
+        return self._readout_pending
+
+    # ── Block execution ─────────────────────────────────────────────────
+
+    def queue_steps(self, steps):
+        """Record that `steps` neural steps are owed to the body clock."""
+        self._step_debt += steps
+
+    def run_block(self):
+        """Run one block of owed steps. False when none is due yet."""
+        if self._step_debt < 1:
+            return False
+        self.run_steps(1)
+        self._step_debt -= 1
+        return True
+
+    def run_steps(self, steps):
+        """Advance `steps` neural steps, queuing one readout per step."""
+        for _ in range(steps):
+            self.step()
+            self.record_spike_readout()
+        return steps
+
+    def finish_pending_steps(self):
+        """Complete already elapsed neural time before changing inputs or saving."""
+        if self._step_debt:
+            steps = self._step_debt
+            self.run_steps(steps)
+            self._step_debt = 0
+
+    def drain_spike_readouts(self):
+        """Copy all queued readouts to the CPU in one transfer.
+
+        Returns a list of (dn_spikes, population_spikes), oldest first.
+        """
+        if not self._readout_rows:
+            return []
+        values = torch.cat(self._readout_rows).detach().cpu().numpy()
+        self._readout_rows.clear()
+        self._readout_pending = 0
+        n_dn = len(self.dn_indices)
+        names = list(self.dn_indices)
+        sections = [(name, section) for name, section in self._readout_slices.items()
+                    if section.stop > section.start]
+        empty = [name for name, section in self._readout_slices.items()
+                 if section.stop <= section.start]
+        pop_means = {name: values[:, section].mean(axis=1).tolist()
+                     for name, section in sections}
+        out = []
+        for i, row in enumerate(values[:, :n_dn].tolist()):
+            populations = {name: means[i] for name, means in pop_means.items()}
+            for name in empty:
+                populations[name] = 0.0
+            out.append((dict(zip(names, row)), populations))
+        return out
+
+    def get_spike_readout(self):
+        """Read the current step's motor and population spikes immediately."""
+        if self._readout_rows:
+            raise RuntimeError('Drain queued spike readouts before a direct read')
+        self.record_spike_readout()
+        return self.drain_spike_readouts()[0]
+
     def register_population(self, name, tensor_indices):
         """Register a neuron population for aggregate spike monitoring."""
+        if self._readout_rows:
+            raise RuntimeError('Cannot register a population with queued spike readouts')
         self.populations[name] = tensor_indices
+        self._readout_indices = None
         print(f"[BrainEngine] Population '{name}': {len(tensor_indices)} neurons")
 
     def get_population_spikes(self):
