@@ -29,7 +29,7 @@ import numpy as np
 import mujoco
 import mujoco.viewer
 
-from flygym import Fly
+from fast_fly import FastFly as Fly
 from flygym.simulation import SingleFlySimulation
 from flygym.examples.locomotion import PreprogrammedSteps
 from flygym.examples.locomotion.turning_controller import HybridTurningController

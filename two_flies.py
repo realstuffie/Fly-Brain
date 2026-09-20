@@ -21,7 +21,7 @@ import mujoco
 import mujoco.viewer
 from scipy.interpolate import interp1d
 
-from flygym import Fly
+from fast_fly import FastFly as Fly
 from flygym.simulation import Simulation
 from flygym.examples.locomotion import PreprogrammedSteps, CPGNetwork
 from flygym.arena import FlatTerrain
