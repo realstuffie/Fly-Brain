@@ -21,6 +21,7 @@ import torch.nn as nn
 from pathlib import Path
 from time import time
 import traceback
+import importlib.util
 
 from benchmark import (
     T_RUN_VALUES_SEC, N_RUN_VALUES,
@@ -171,19 +172,58 @@ class TorchModel(nn.Module):
     the Drosophila connectome.
     """
 
-    def __init__(self, batch, size, dt, params, weights, device='cpu'):
+    def __init__(self, batch, size, dt, params, weights, device='cpu',
+                 propagation='sparse'):
         super().__init__()
         self.neurons = AlphaLIF(batch, size, dt, params, device=device)
         self.weights = weights
         self.poisson = PoissonSpikeGenerator(dt, params['scalePoisson'], device=device)
         self.scale = params['wScale']
+        if propagation not in ('auto', 'sparse', 'event'):
+            raise ValueError(f'Unknown propagation backend: {propagation}')
+        self.propagation_backend = 'sparse'
+        self._event_propagator = None
+        self._fused_neurons = None
+        use_event = propagation == 'event' or (
+            propagation == 'auto' and weights.device.type == 'cuda'
+            and torch.version.hip is not None and weights.layout == torch.sparse_csr
+            and weights.dtype == torch.float32 and weights._nnz() >= 100000
+            and not torch.are_deterministic_algorithms_enabled()
+            and importlib.util.find_spec('triton') is not None
+        )
+        if use_event:
+            if weights.device.type != 'cuda':
+                raise ValueError('Event propagation requires a GPU; use auto or sparse on CPU')
+            if importlib.util.find_spec('triton') is None:
+                raise ImportError('Event propagation requires Triton from a GPU PyTorch installation')
+            from event_propagation import EventPropagation
+            from neuron_step import FusedNeuronStep
+            self._event_propagator = EventPropagation(weights)
+            self._fused_neurons = FusedNeuronStep(self.neurons, self.scale)
+            # Compile before the simulation clock starts. This does not advance
+            # neuron state, modify weights, or consume random numbers.
+            with torch.no_grad():
+                zeros = torch.zeros(batch, size, device=weights.device)
+                self._event_propagator(zeros)
+                self._fused_neurons(zeros, zeros, *self.state_init())
+            self.propagation_backend = 'event'
 
     def state_init(self):
         return self.neurons.state_init()
 
     def forward(self, rates, conductance, delay_buffer, spikes, v, refrac, generator=None):
         spikes_input = self.poisson(rates, generator=generator)
-        weighted_spikes = torch.matmul(spikes, self.weights.transpose(0, 1))
+        if (self._event_propagator is not None and not torch.is_grad_enabled()
+                and not torch.are_deterministic_algorithms_enabled()):
+            weighted_spikes = self._event_propagator(spikes)
+            if (self._fused_neurons is not None
+                    and all(t.dtype == torch.float32 and t.is_contiguous()
+                            for t in (spikes_input, weighted_spikes, conductance,
+                                      delay_buffer, spikes, v, refrac))):
+                return self._fused_neurons(spikes_input, weighted_spikes,
+                                           conductance, delay_buffer, spikes, v, refrac)
+        else:
+            weighted_spikes = torch.matmul(spikes, self.weights.transpose(0, 1))
         conductance, delay_buffer, spikes, v, refrac = self.neurons(
             self.scale * (spikes_input + weighted_spikes),
             conductance, delay_buffer, spikes, v, refrac,
@@ -211,15 +251,20 @@ def get_weights(conn_path, comp_path, wt_dir, csr=True):
     coo_path = wt_dir / 'weight_coo.pkl'
     csr_path = wt_dir / 'weight_csr.pkl'
 
-    data_conn = pd.read_parquet(conn_path)
-    data_name = pd.read_csv(comp_path)
-    num_neurons = data_name.shape[0]
+    if csr:
+        try:
+            with open(csr_path, 'rb') as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            pass
 
     try:
         with open(coo_path, 'rb') as f:
             weight_coo = pickle.load(f)
     except FileNotFoundError:
         print('Weights not found, constructing COO weight matrix...')
+        data_conn = pd.read_parquet(conn_path)
+        num_neurons = pd.read_csv(comp_path).shape[0]
         idx = [
             data_conn['Postsynaptic_Index'].to_list(),
             data_conn['Presynaptic_Index'].to_list(),
@@ -232,14 +277,10 @@ def get_weights(conn_path, comp_path, wt_dir, csr=True):
             pickle.dump(weight_coo, f)
 
     if csr:
-        try:
-            with open(csr_path, 'rb') as f:
-                weight_csr = pickle.load(f)
-        except FileNotFoundError:
-            print('CSR weights not found, converting from COO...')
-            weight_csr = weight_coo.to_sparse_csr()
-            with open(csr_path, 'wb') as f:
-                pickle.dump(weight_csr, f)
+        print('CSR weights not found, converting from COO...')
+        weight_csr = weight_coo.to_sparse_csr()
+        with open(csr_path, 'wb') as f:
+            pickle.dump(weight_csr, f)
         return weight_csr
     else:
         return weight_coo

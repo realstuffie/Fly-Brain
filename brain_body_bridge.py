@@ -278,7 +278,7 @@ STIMULI = {
 class BrainEngine:
     """Wraps fly-brain TorchModel for step-by-step execution on GPU."""
 
-    def __init__(self, device='cuda', plastic_path=None):
+    def __init__(self, device='cuda', plastic_path=None, propagation='auto'):
         self.device = device if torch.cuda.is_available() else 'cpu'
         self.dt = DT  # 0.1 ms
         self._plastic_path = Path(plastic_path) if plastic_path else PLASTIC_PATH
@@ -299,6 +299,7 @@ class BrainEngine:
         self.model = TorchModel(
             batch=1, size=self.num_neurons, dt=self.dt,
             params=MODEL_PARAMS, weights=weights, device=self.device,
+            propagation=propagation,
         )
 
         # Initialize neural state
@@ -324,6 +325,7 @@ class BrainEngine:
         self.populations = {}  # {name: tensor_indices}
 
         print(f"[BrainEngine] {self.num_neurons} neurons on {self.device}")
+        print(f"[BrainEngine] Recurrent propagation: {self.model.propagation_backend}")
         print(f"[BrainEngine] DN neurons mapped: "
               f"{len(self.dn_indices)}/{len(DN_NEURONS)}")
         for s, idx in self.stim_indices.items():
@@ -382,10 +384,24 @@ class BrainEngine:
         print(f"[BrainEngine] Hebbian plasticity active: "
               f"{len(self._syn_vals)} synapses")
 
+        self._fast_hebb = None
+        try:
+            from plasticity import update_weights
+            self._fast_hebb = update_weights
+            print("[BrainEngine] Hebbian fast path active (triton single-pass)")
+        except ImportError:
+            pass  # triton unavailable — fall back to torch ops
+
     def _hebb_update(self):
         """Hebbian update: co-active synapses strengthen, all decay."""
         avg = self._spike_acc / HEBB_BATCH
         self._spike_acc.zero_()
+
+        if self._fast_hebb is not None:
+            self._fast_hebb(self._syn_vals, self._col_idx, self._post_idx, avg,
+                            self._sign_mask, self._clamp_min, self._clamp_max,
+                            HEBB_ETA, HEBB_ALPHA)
+            return
 
         pre = avg[self._col_idx]
         post = avg[self._post_idx]
