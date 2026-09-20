@@ -1174,8 +1174,10 @@ class BrainRenderer:
 
 def _monitor_loop(queue):
     """Entry point for the brain monitor child process."""
+    import os
     import sys
     import traceback
+    parent_pid = os.getppid()
     try:
         import pygame
         import numpy  # noqa: F401  — ensure available for GlowCache
@@ -1188,6 +1190,8 @@ def _monitor_loop(queue):
 
         running = True
         while running:
+            if os.getppid() != parent_pid:
+                break  # parent died (hard crash) — don't orphan a frozen window
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -1219,15 +1223,23 @@ def _monitor_loop(queue):
 # ============================================================================
 
 class BrainMonitorProcess:
-    """Manages the brain monitor child process."""
+    """Manages the brain monitor child process.
+
+    Uses the 'spawn' start method: forking from a process that already holds
+    a live KFD/GPU context duplicates that state into the child and corrupts
+    the driver's VA space (amdgpu 'bo va conflict' + 'CS rejected'). Spawn
+    re-execs a fresh interpreter, so the child starts with a clean fd table.
+    """
+
+    _ctx = mp.get_context("spawn")
 
     def __init__(self):
-        self.queue = mp.Queue(maxsize=10)
+        self.queue = self._ctx.Queue(maxsize=10)
         self.process = None
 
     def start(self):
         """Launch the monitor in a separate process."""
-        self.process = mp.Process(
+        self.process = self._ctx.Process(
             target=_monitor_loop, args=(self.queue,), daemon=True)
         self.process.start()
 
