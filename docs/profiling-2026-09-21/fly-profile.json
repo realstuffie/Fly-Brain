@@ -1,0 +1,12 @@
+{
+  "reference": false,
+  "profiled": true,
+  "gpu": "AMD Radeon Graphics",
+  "torch": "2.10.0+rocm7.1",
+  "steps": 10000,
+  "simulated_seconds": 1.0,
+  "loop_wall_seconds": 20.659520204999808,
+  "total_wall_seconds": 27.321205864999683,
+  "body_steps_per_second": 484.03834652364776,
+  "realtime_factor": 0.04840383465236478
+}

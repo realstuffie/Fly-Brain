@@ -1,0 +1,83 @@
+Mon Sep 21 13:59:06 2026    /tmp/fly-profile.prof
+
+         9871831 function calls (9870471 primitive calls) in 20.495 seconds
+
+   Ordered by: cumulative time
+   List reduced from 582 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     9999    0.021    0.000   19.273    0.002 profile_embodied.py:46(step)
+    10000    0.624    0.000   19.256    0.002 turning_controller.py:364(step)
+    10000    0.016    0.000   14.398    0.001 simulation.py:436(step)
+    10000    0.050    0.000   14.367    0.001 simulation.py:178(step)
+    20000    1.586    0.000    9.031    0.000 fast_fly.py:35(get_observation)
+    10000    0.036    0.000    7.775    0.001 fly.py:1318(post_step)
+    10000    0.022    0.000    6.270    0.001 engine.py:164(step)
+    10000    0.011    0.000    6.193    0.001 physics.py:510(forward)
+    10000    0.024    0.000    6.182    0.001 engine.py:313(forward)
+    10000    0.053    0.000    6.153    0.001 engine.py:147(_step_with_up_to_date_position_velocity)
+    10000    6.077    0.001    6.077    0.001 {built-in method mujoco._functions.mj_forward}
+    10000    4.169    0.000    4.169    0.000 {built-in method mujoco._functions.mj_step1}
+    10000    1.892    0.000    1.892    0.000 {built-in method mujoco._functions.mj_step2}
+    10000    0.023    0.000    1.319    0.000 simulation.py:471(get_observation)
+   121791    0.165    0.000    1.092    0.000 fromnumeric.py:3385(mean)
+   141798    0.399    0.000    1.081    0.000 _methods.py:101(_mean)
+    60000    0.046    0.000    1.035    0.000 _polyint.py:60(__call__)
+    60000    0.162    0.000    0.866    0.000 steps.py:90(get_joint_angles)
+    60000    0.385    0.000    0.665    0.000 _interpolate.py:744(__call__)
+    60000    0.037    0.000    0.642    0.000 _interpolate.py:526(_evaluate)
+     9999    0.117    0.000    0.612    0.000 brain_body_bridge.py:721(compute_drive)
+    60000    0.380    0.000    0.600    0.000 _interpolate.py:457(_call_linear)
+   180106    0.088    0.000    0.376    0.000 fromnumeric.py:53(_wrapfunc)
+    60000    0.244    0.000    0.355    0.000 turning_controller.py:281(_stumbling_rule_check_condition)
+    60000    0.034    0.000    0.306    0.000 _polyint.py:91(_prepare_x)
+   232293    0.293    0.000    0.293    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+    80106    0.043    0.000    0.267    0.000 fromnumeric.py:2100(clip)
+    60000    0.119    0.000    0.262    0.000 _util.py:491(_asarray_validated)
+   163188    0.035    0.000    0.206    0.000 {built-in method builtins.next}
+   140106    0.192    0.000    0.192    0.000 _methods.py:90(_clip)
+   141798    0.155    0.000    0.178    0.000 _methods.py:67(_count_reduce_items)
+    60000    0.157    0.000    0.174    0.000 _interpolate.py:858(_evaluate)
+    79897    0.062    0.000    0.174    0.000 {method 'clip' of 'numpy.generic' objects}
+    81592    0.040    0.000    0.168    0.000 contextlib.py:139(__exit__)
+    20007    0.007    0.000    0.161    0.000 {method 'mean' of 'numpy.ndarray' objects}
+    10000    0.064    0.000    0.152    0.000 looming_arena.py:243(step)
+    10000    0.034    0.000    0.148    0.000 cpg_controller.py:77(step)
+    79998    0.026    0.000    0.145    0.000 {method 'any' of 'numpy.ndarray' objects}
+    79998    0.022    0.000    0.119    0.000 _methods.py:55(_any)
+    10000    0.088    0.000    0.114    0.000 cpg_controller.py:7(calculate_ddt)
+
+
+Mon Sep 21 13:59:06 2026    /tmp/fly-profile.prof
+
+         9871831 function calls (9870471 primitive calls) in 20.495 seconds
+
+   Ordered by: internal time
+   List reduced from 582 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    10000    6.077    0.001    6.077    0.001 {built-in method mujoco._functions.mj_forward}
+    10000    4.169    0.000    4.169    0.000 {built-in method mujoco._functions.mj_step1}
+    10000    1.892    0.000    1.892    0.000 {built-in method mujoco._functions.mj_step2}
+    20000    1.586    0.000    9.031    0.000 fast_fly.py:35(get_observation)
+    10000    0.624    0.000   19.256    0.002 turning_controller.py:364(step)
+   141798    0.399    0.000    1.081    0.000 _methods.py:101(_mean)
+    60000    0.385    0.000    0.665    0.000 _interpolate.py:744(__call__)
+    60000    0.380    0.000    0.600    0.000 _interpolate.py:457(_call_linear)
+   232293    0.293    0.000    0.293    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+    60000    0.244    0.000    0.355    0.000 turning_controller.py:281(_stumbling_rule_check_condition)
+   140106    0.192    0.000    0.192    0.000 _methods.py:90(_clip)
+   121791    0.165    0.000    1.092    0.000 fromnumeric.py:3385(mean)
+    60000    0.162    0.000    0.866    0.000 steps.py:90(get_joint_angles)
+    60000    0.157    0.000    0.174    0.000 _interpolate.py:858(_evaluate)
+   141798    0.155    0.000    0.178    0.000 _methods.py:67(_count_reduce_items)
+    60000    0.119    0.000    0.262    0.000 _util.py:491(_asarray_validated)
+     9999    0.117    0.000    0.612    0.000 brain_body_bridge.py:721(compute_drive)
+    10000    0.088    0.000    0.114    0.000 cpg_controller.py:7(calculate_ddt)
+   180106    0.088    0.000    0.376    0.000 fromnumeric.py:53(_wrapfunc)
+   181816    0.085    0.000    0.085    0.000 {built-in method numpy.asanyarray}
+   160382    0.081    0.000    0.081    0.000 {built-in method numpy.array}
+     2575    0.076    0.000    0.076    0.000 {method 'item' of 'torch._C.TensorBase' objects}
+    20000    0.074    0.000    0.096    0.000 shape_base.py:612(column_stack)
+    30021    0.071    0.000    0.105    0.000 physics.py:356(__setattr__)
+   150000    0.069    0.000    0.069    0.000 {method 'astype' of 'numpy.ndarray' objects}

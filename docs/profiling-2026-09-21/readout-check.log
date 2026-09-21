@@ -1,0 +1,45 @@
+/opt/amdgpu/share/libdrm/amdgpu.ids: No such file or directory
+/opt/amdgpu/share/libdrm/amdgpu.ids: No such file or directory
+[BrainEngine] 138639 neurons on cuda
+[BrainEngine] Recurrent propagation: event
+[BrainEngine] DN neurons mapped: 18/18
+  'sugar': 21/21 neurons
+  'p9': 2/2 neurons
+  'lc4': 104/104 neurons
+  'jo': 209/209 neurons
+  'bitter': 42/42 neurons
+  'or56a': 39/39 neurons
+[BrainEngine] Loaded plastic weights from /home/stuffie/IDE/fly-brain-pristine/data/plastic_weights.pt
+[BrainEngine] Hebbian plasticity active: 15091983 synapses
+[VisualSystem] Loading cached annotations from /home/stuffie/IDE/fly-brain-pristine/data/flywire_annotations.tsv
+[VisualSystem] Annotations: 139244 neurons
+[VisualSystem] Found 11112 photoreceptor annotations
+[VisualSystem] R1-R8: 10580 photoreceptors (L=5373, R=5207)
+[VisualSystem] L1=1590 L2=1696 Mi1=1582 Tm1=1554 Tm2=1552 T2=3240
+[VisualSystem] LPLC2: L=108 R=102  LC4: L=54 R=50
+[VisualSystem] T2->LC4->GF via pure connectome weights
+[Somatosensory] JO-touch: 428 neurons (L=222, R=206)
+[Somatosensory] JO-sound: 390 neurons (L=213, R=177)
+[BrainEngine] Population 'LPLC2_left': 108 neurons
+[BrainEngine] Population 'LPLC2_right': 102 neurons
+[BrainEngine] Population 'LC4_left': 54 neurons
+[BrainEngine] Population 'LC4_right': 50 neurons
+[BrainEngine] Population 'JO_touch_L': 222 neurons
+[BrainEngine] Population 'JO_touch_R': 206 neurons
+[BrainEngine] Population 'JO_sound_L': 213 neurons
+[BrainEngine] Population 'JO_sound_R': 177 neurons
+{
+  "result": "PASS",
+  "brain_steps": 1200,
+  "neural_ms": 120,
+  "neurons": 138639,
+  "synapses": 15091983,
+  "populations": 8,
+  "total_spikes": 1492,
+  "dn_spikes": 17,
+  "readout_mismatches": 0,
+  "decoder_mismatches": 0,
+  "drive_mismatches": 0,
+  "readout_mutations": 0,
+  "saved_weights": false
+}

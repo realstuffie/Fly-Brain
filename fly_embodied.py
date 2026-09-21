@@ -728,9 +728,8 @@ def main():
             # ── Brain step (1 per BRAIN_RATIO body steps) ──
             if brain is not None and body_step % BRAIN_RATIO == 0:
                 brain.step()
-                dn_spikes = brain.get_dn_spikes()
-                pop_spikes = brain.get_population_spikes() if brain.populations else None
-                decoder.update(dn_spikes, pop_spikes)
+                dn_spikes, pop_spikes = brain.get_spike_readout()
+                decoder.update(dn_spikes, pop_spikes if brain.populations else None)
                 if consciousness is not None:
                     consciousness.update(body_step, bridge.mode)
 

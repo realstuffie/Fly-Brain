@@ -37,7 +37,9 @@ def test_batched_block_matches_per_step_readout(small_brain):
     for _ in range(body_steps):
         for _ in range(steps_per_body):
             reference.step()
-            reference_readouts.append(reference.get_spike_readout())
+            legacy_readout = (reference.get_dn_spikes(), reference.get_population_spikes())
+            assert reference.get_spike_readout() == legacy_readout
+            reference_readouts.append(legacy_readout)
     assert batched.pending_spike_readouts() == 0
     assert batched._step_debt == 0
     assert len(batched_readouts) == len(reference_readouts)

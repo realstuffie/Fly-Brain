@@ -945,10 +945,9 @@ def main():
                 # ── Brain step ──
                 _t0 = _time.perf_counter()
                 pipe.brain.step()
-                dn_spikes = pipe.brain.get_dn_spikes()
-                pop_spikes = (pipe.brain.get_population_spikes()
-                              if pipe.brain.populations else None)
-                pipe.decoder.update(dn_spikes, pop_spikes)
+                dn_spikes, pop_spikes = pipe.brain.get_spike_readout()
+                pipe.decoder.update(
+                    dn_spikes, pop_spikes if pipe.brain.populations else None)
                 _prof_brain += _time.perf_counter() - _t0
 
                 # ── Consciousness update (per brain tick) ──

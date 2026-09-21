@@ -508,8 +508,16 @@ class BrainEngine:
         """
         if self._readout_indices is None:
             self._build_readout_index()
-        self._readout_rows.append(
-            self.state[2][0].index_select(0, self._readout_indices).unsqueeze(0))
+        selected = self.state[2][0].index_select(0, self._readout_indices)
+        # Match the original GPU mean operation exactly. Averaging on the CPU
+        # can round differently even when the input spikes are identical.
+        means = [selected[section].mean() if section.stop > section.start
+                 else selected.new_zeros(())
+                 for section in self._readout_slices.values()]
+        row = selected[:len(self.dn_indices)]
+        if means:
+            row = torch.cat((row, torch.stack(means)))
+        self._readout_rows.append(row.unsqueeze(0))
         self._readout_pending += 1
 
     def pending_spike_readouts(self):
@@ -555,17 +563,11 @@ class BrainEngine:
         self._readout_pending = 0
         n_dn = len(self.dn_indices)
         names = list(self.dn_indices)
-        sections = [(name, section) for name, section in self._readout_slices.items()
-                    if section.stop > section.start]
-        empty = [name for name, section in self._readout_slices.items()
-                 if section.stop <= section.start]
-        pop_means = {name: values[:, section].mean(axis=1).tolist()
-                     for name, section in sections}
+        pop_means = {name: values[:, n_dn + offset].tolist()
+                     for offset, name in enumerate(self._readout_slices)}
         out = []
         for i, row in enumerate(values[:, :n_dn].tolist()):
             populations = {name: means[i] for name, means in pop_means.items()}
-            for name in empty:
-                populations[name] = 0.0
             out.append((dict(zip(names, row)), populations))
         return out
 
