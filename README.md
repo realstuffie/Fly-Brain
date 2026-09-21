@@ -3,6 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GPU Accelerated](https://img.shields.io/badge/GPU-CUDA%2012.x-76B900.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![ROCm tested](https://img.shields.io/badge/AMD-ROCm%207.1%20tested-ED1C24.svg)](#amd-rocm-support)
 [![NeuroMechFly](https://img.shields.io/badge/body-NeuroMechFly%20v2-orange.svg)](https://neuromechfly.org/)
 [![FlyWire Connectome](https://img.shields.io/badge/brain-FlyWire%20v783-purple.svg)](https://flywire.ai/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19152238.svg)](https://doi.org/10.5281/zenodo.19152238)
@@ -12,6 +13,7 @@
 > and the Zenodo DOI refers to his paper rather than to this fork. This copy is
 > maintained by [@realstuffie](https://github.com/realstuffie) and adds:
 >
+> - Working AMD ROCm support on Linux, including @realstuffie's brain-monitor crash fix
 > - Event propagation brain stepping with a fused LIF kernel
 > - Triton Hebbian update restricted to the event backend
 > - Block stepping and batched spike readouts in the brain engine
@@ -104,6 +106,9 @@ git lfs pull   # downloads large data files (~270 MB)
 ```
 
 ### 2. Install Dependencies
+
+The commands below use NVIDIA CUDA. For AMD GPUs, use a ROCm build of PyTorch
+and the tested versions in [AMD ROCm support](#amd-rocm-support).
 
 ```bash
 # PyTorch with CUDA 12.1 (adjust for your CUDA version)
@@ -363,7 +368,58 @@ See Figures 2–9 in the paper for detailed visualizations.
 
 ---
 
+## AMD ROCm support
+
+This fork also runs on AMD GPUs with ROCm on Linux. @realstuffie fixed the
+amdgpu crash when opening the brain monitor in commit `4c4e568`. The monitor
+now starts with `spawn`, so it does not inherit the parent's live GPU context,
+and exits if its parent dies.
+
+The tested setup uses a Radeon RX 7900 XTX with 24 GB VRAM. PyTorch reports it
+as `AMD Radeon Graphics`, architecture `gfx1100`.
+
+| Component | Tested version |
+|---|---|
+| Python | 3.10 |
+| PyTorch | `2.10.0+rocm7.1` |
+| FlyGym | `1.0.1` |
+| MuJoCo | `3.2.2` |
+| dm-control | `1.0.22` |
+
+Use a ROCm-enabled PyTorch installation for this setup. The CUDA installation
+commands above and `environment.yml` target NVIDIA and do not configure ROCm.
+`requirements-body.txt` pins the tested body dependencies.
+
+Check the active Python environment before running:
+
+```bash
+python -c "import torch; print('PyTorch:', torch.__version__); print('HIP:', torch.version.hip); print('GPU available:', torch.cuda.is_available())"
+```
+
+The HIP version should be set and GPU availability should be `True`. The tested
+ROCm build uses the `torch.cuda` API and `cuda` device names. Those names in this
+repository do not mean an NVIDIA GPU is required for the PyTorch brain engine.
+
+The brain engine automatically selects event propagation for eligible ROCm
+weights when Triton is available. Startup prints `Recurrent propagation: event`.
+The fast path includes event propagation, fused LIF updates, and Hebbian
+plasticity. MuJoCo still runs body physics on the CPU.
+
+Verification completed 10,000 body steps with vision, flight, olfactory,
+gustatory, and somatosensory processing enabled. All eight existing tests passed.
+A separate 1,200-step GPU check matched the original and combined spike readouts
+exactly. These automated runs did not include the interactive viewer or monitor.
+See the [verification and profiling report](docs/FAST_PATH_PROFILE.md) for the
+commands, measurements, and test limits. For headless rendering on this setup,
+set `MUJOCO_GL=egl`.
+
+These results cover the PyTorch brain engine and embodied simulation. They do
+not establish ROCm support for the separate Brian2CUDA or NEST GPU backends.
+
 ## System Requirements
+
+The table below records the upstream NVIDIA setup. The fork's tested AMD setup
+is listed in [AMD ROCm support](#amd-rocm-support).
 
 | Component | Minimum | Tested |
 |---|---|---|
