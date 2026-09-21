@@ -203,6 +203,7 @@ SIDEBAR_BARS = [
 
 MODE_COLORS = {
     'walking':  COL_MOTOR,
+    'stationary': COL_HUD,
     'escape':   COL_ESCAPE,
     'grooming': COL_GROOM,
     'feeding':  COL_FEED,

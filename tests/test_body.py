@@ -5,6 +5,9 @@ pytest.importorskip('flygym')
 from flygym import Fly
 from flygym.examples.locomotion.turning_controller import HybridTurningController
 from fast_fly import FastFly
+from fast_controller import FastTurningController
+from physics_refresh import reuse_physics_stages
+from flygym.simulation import SingleFlySimulation
 
 
 @pytest.mark.parametrize('vision', [False, True])
@@ -82,3 +85,47 @@ def test_fast_observations_resolve_each_fly_in_shared_physics():
                     np.testing.assert_array_equal(observations[fly.name][key], expected[key])
     finally:
         sim.close()
+
+
+def test_cached_controller_observation_survives_mode_changes_and_raw_edits():
+    simulations = []
+    contacts = [f'{leg}{segment}'
+                for leg in ('LF', 'LM', 'LH', 'RF', 'RM', 'RH')
+                for segment in ('Tibia', 'Tarsus1', 'Tarsus2', 'Tarsus3', 'Tarsus4', 'Tarsus5')]
+    try:
+        for reuse in (False, True):
+            sim = FastTurningController(
+                fly=FastFly(enable_adhesion=True, contact_sensor_placements=contacts),
+                timestep=1e-4,
+                seed=0, reuse_observations=reuse)
+            reuse_physics_stages(sim.physics)
+            sim.reset(seed=0)
+            simulations.append(sim)
+
+        for step in range(300):
+            if step == 100:
+                # The app bypasses the walking controller for grooming/flight.
+                action = {'joints': np.zeros(len(simulations[0].fly.actuated_joints)),
+                          'adhesion': np.zeros(6)}
+            if step == 160:
+                # The app also edits qpos directly for proboscis and flight.
+                for sim in simulations:
+                    sim.physics.data.ptr.qpos[0] += .1
+                    sim.invalidate_observation()
+            results = []
+            for sim in simulations:
+                if 100 <= step < 140:
+                    sim.invalidate_observation()
+                    results.append(SingleFlySimulation.step(sim, action))
+                else:
+                    results.append(sim.step(np.array([1., .8])))
+            for field in ('qpos', 'qvel', 'sensordata', 'cfrc_ext'):
+                np.testing.assert_array_equal(
+                    getattr(simulations[0].physics.data, field),
+                    getattr(simulations[1].physics.data, field), err_msg=field)
+            for key in ('fly', 'joints', 'contact_forces', 'end_effectors'):
+                np.testing.assert_array_equal(results[0][0][key], results[1][0][key],
+                                              err_msg=key)
+    finally:
+        for sim in simulations:
+            sim.close()

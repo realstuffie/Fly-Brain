@@ -25,6 +25,7 @@ Keys (in MuJoCo viewer window):
 
 import sys
 import argparse
+from collections import deque
 import numpy as np
 import mujoco
 import mujoco.viewer
@@ -32,7 +33,7 @@ import mujoco.viewer
 from fast_fly import FastFly as Fly
 from flygym.simulation import SingleFlySimulation
 from flygym.examples.locomotion import PreprogrammedSteps
-from flygym.examples.locomotion.turning_controller import HybridTurningController
+from fast_controller import FastTurningController as HybridTurningController
 
 from brain_body_bridge import (
     BrainEngine, DNRateDecoder, BrainBodyBridge, STIMULI, DN_GROUPS,
@@ -40,6 +41,7 @@ from brain_body_bridge import (
 from visual_system import VisualSystem
 from looming_arena import LoomingArena
 from brain_monitor import BrainMonitorProcess
+from physics_refresh import reuse_physics_stages
 from somatosensory import SomatosensorySystem, VibrationSource
 from gustatory import GustatorySystem, TasteZone
 from olfactory import OlfactorySystem, OdorSource
@@ -116,6 +118,8 @@ def main():
                         help='Run body only with manual drive (no neural sim)')
     parser.add_argument('--no-auto', action='store_true',
                         help='Disable auto-demo (manual keyboard only)')
+    parser.add_argument('--no-observation-reuse', action='store_true',
+                        help='Recompute the gait controller observation every step')
     parser.add_argument('--stimulus', type=str, default=None,
                         choices=list(STIMULI.keys()),
                         help='Initial stimulus to activate')
@@ -335,8 +339,10 @@ def main():
         fly=fly,
         timestep=1e-4,
         seed=0,
+        reuse_observations=not args.no_observation_reuse,
         **arena_kwargs,
     )
+    reuse_physics_stages(sim.physics)
 
     # ── Disable flygym's internal vision rendering BEFORE reset ──
     # Cameras and retina are already initialized from Fly.__init__().
@@ -515,12 +521,14 @@ def main():
 
     # ── Timing constants ──
     MONITOR_INTERVAL = 500   # send data every 500 body steps (~50ms sim)
+    MONITOR_WALK_SPEED_MM_S = 0.1  # ignore small position jitter
     BRAIN_RATIO = 100        # 1 brain step per 100 body steps (10Hz neural update)
     VISION_RATIO = 1000     # process vision every 1000 body steps (= 100ms, 10Hz)
     STEPS_PER_FRAME = 167    # body steps per viewer frame (~60fps at 1e-4 timestep)
     STATUS_INTERVAL = 10000  # status print every 1.0s sim time
 
     body_step = 0
+    monitor_positions = deque(maxlen=11)  # 0.5 seconds at monitor cadence
     prev_mode = 'walking'
     cached_visual = (None, None)  # cached ALL visual layer (indices, rates)
     last_vision_obs = None        # last vision obs for diagnostics
@@ -772,6 +780,7 @@ def main():
             # ── Body step ──
             try:
                 if bridge.mode == 'flight':
+                    sim.invalidate_observation()
                     # Flight: legs frozen in neutral pose, adhesion OFF
                     flight_action = {
                         "joints": groom_ctrl.neutral.copy(),
@@ -780,6 +789,7 @@ def main():
                     obs, reward, terminated, truncated, info = \
                         SingleFlySimulation.step(sim, flight_action)
                 elif bridge.mode == 'grooming':
+                    sim.invalidate_observation()
                     groom_action = groom_ctrl.get_action(
                         body_step * sim.timestep)
                     obs, reward, terminated, truncated, info = \
@@ -791,6 +801,7 @@ def main():
                 # ── Proboscis extension during feeding ──
                 if proboscis_qadr >= 0 and bridge.mode == 'feeding':
                     sim.physics.data.ptr.qpos[proboscis_qadr] = 1.0
+                    sim.invalidate_observation()
 
                 # ── Orientation override during flight (post-step) ──
                 # Directly set the free joint quaternion to prevent spinning.
@@ -810,8 +821,10 @@ def main():
                         # Also damp horizontal for clean landing
                         data_ptr.qvel[dof_adr + 0] *= 0.98
                         data_ptr.qvel[dof_adr + 1] *= 0.98
+                    sim.invalidate_observation()
 
             except Exception as e:
+                sim.invalidate_observation()
                 physics_errors += 1
                 if physics_errors >= 50:
                     print(f"  Physics unstable ({physics_errors} errors): {e}")
@@ -828,6 +841,7 @@ def main():
                 if _sleep > 0.001:
                     _time.sleep(_sleep)
                 viewer.sync()
+                sim.invalidate_observation()
                 # Prevent accumulated time debt when falling behind
                 _next_viewer_sync = max(
                     _next_viewer_sync, _now) + _frame_target
@@ -923,9 +937,22 @@ def main():
             # ── Send data to brain monitor ──
             if monitor is not None and body_step % MONITOR_INTERVAL == 0:
                 d = decoder
+                monitor_time = body_step * sim.timestep
+                monitor_position = np.asarray(obs['fly'][0][:2], dtype=float).copy()
+                monitor_positions.append((monitor_time, monitor_position))
+                walking_moving = False
+                if len(monitor_positions) == monitor_positions.maxlen:
+                    start_time, start_position = monitor_positions[0]
+                    elapsed = monitor_time - start_time
+                    speed = np.linalg.norm(
+                        monitor_position - start_position) / elapsed
+                    walking_moving = speed >= MONITOR_WALK_SPEED_MM_S
+                monitor_mode = bridge.mode
+                if monitor_mode == 'walking' and not walking_moving:
+                    monitor_mode = 'stationary'
                 mon_data = {
-                    't_sim': body_step * sim.timestep,
-                    'mode': bridge.mode,
+                    't_sim': monitor_time,
+                    'mode': monitor_mode,
                     'drive': [bridge.left_drive, bridge.right_drive],
                     'stimulus': active_stimulus[0] or 'none',
                     'dn_forward': d.get_group_rate('forward'),

@@ -14,6 +14,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seconds', type=float, default=1.0)
     parser.add_argument('--reference', action='store_true')
+    parser.add_argument('--reference-physics-refresh', action='store_true')
+    parser.add_argument('--reference-controller', action='store_true')
+    parser.add_argument('--no-observation-reuse', action='store_true')
     parser.add_argument('--profile', action='store_true')
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
@@ -23,6 +26,19 @@ def main():
     import torch
     import fly_embodied as app
     from flygym import Fly
+
+    if args.reference_physics_refresh:
+        app.reuse_physics_stages = lambda physics: None
+    if args.reference_controller:
+        from flygym.examples.locomotion.turning_controller import HybridTurningController
+        class ReferenceController(HybridTurningController):
+            def __init__(self, *positional, reuse_observations=True, **keywords):
+                super().__init__(*positional, **keywords)
+
+            def invalidate_observation(self):
+                pass
+
+        app.HybridTurningController = ReferenceController
 
     if not torch.cuda.is_available():
         raise RuntimeError('GPU unavailable; refusing to report CPU fallback as GPU performance')
@@ -57,6 +73,8 @@ def main():
     app.HybridTurningController.step = step
     sys.argv = ['fly_embodied.py', '--no-viewer', '--duration', str(args.seconds),
                 '--visual', '--flight', '--olfactory', '--gustatory', '--somatosensory']
+    if args.no_observation_reuse:
+        sys.argv.append('--no-observation-reuse')
     started = time.perf_counter()
     app.main()
     torch.cuda.synchronize()
@@ -65,7 +83,11 @@ def main():
         profiler.disable()
         profiler.dump_stats(args.output + '.prof')
     elapsed = ended - timings['start']
-    result = dict(reference=args.reference, profiled=args.profile,
+    result = dict(reference=args.reference,
+                  reference_physics_refresh=args.reference_physics_refresh,
+                  reference_controller=args.reference_controller,
+                  observation_reuse=not args.no_observation_reuse,
+                  profiled=args.profile,
                   gpu=torch.cuda.get_device_name(), torch=torch.__version__,
                   steps=timings['steps'], simulated_seconds=timings['steps'] * timings['dt'],
                   loop_wall_seconds=elapsed, total_wall_seconds=ended - started,
