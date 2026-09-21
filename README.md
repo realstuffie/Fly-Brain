@@ -7,6 +7,20 @@
 [![FlyWire Connectome](https://img.shields.io/badge/brain-FlyWire%20v783-purple.svg)](https://flywire.ai/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19152238.svg)](https://doi.org/10.5281/zenodo.19152238)
 
+> **This is a fork.** The simulation and both papers are the work of Enrique Manuel
+> Rojas Aliaga, from [erojasoficial-byte/fly-brain](https://github.com/erojasoficial-byte/fly-brain),
+> and the Zenodo DOI refers to his paper rather than to this fork. This copy is
+> maintained by [@realstuffie](https://github.com/realstuffie) and adds:
+>
+> - Event propagation brain stepping with a fused LIF kernel
+> - Triton Hebbian update restricted to the event backend
+> - Block stepping and batched spike readouts in the brain engine
+> - Cached sensor indices for fly observations in `FastFly`
+> - A fix for an amdgpu crash when launching the brain monitor
+>
+> This repository is a mirror, so anything merged here is overwritten on the next
+> sync. Open an issue rather than a pull request.
+
 > **Enrique Manuel Rojas Aliaga** · Facultad de Ingenieria y Arquitectura, Universidad de San Martin de Porres · Lima, Peru · enrique_rojas1@usmp.pe
 
 <div align="center">
